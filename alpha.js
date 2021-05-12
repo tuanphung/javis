@@ -1,4 +1,5 @@
 require('app-module-path').addPath(__dirname);
+require('dotenv').config()
 
 const javis = require('javis.js')
 const network = require('network.js')
