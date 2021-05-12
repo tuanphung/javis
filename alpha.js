@@ -1,6 +1,8 @@
 require('app-module-path').addPath(__dirname);
 require('dotenv').config()
 
+const moment = require('moment')
+
 const javis = require('javis.js')
 const network = require('network.js')
 const utils = require('utils')
@@ -231,6 +233,21 @@ async function reInvestPoolIfAny(poolName) {
     const pid = pools[poolName].pid
     const address = pools[poolName].address
     var threshold = pools[poolName].threshold * multiplier
+    let aggressiveThreshold = threshold * 0.9
+
+    // Check if cached reward is available
+    var reward = pools[poolName].reward
+    var checkedAt = pools[poolName].checkedAt
+
+    // Skip check if
+    // - reward > 0 AND reward < `aggressiveThreshold`
+    // - checkedAt 
+    if (checkedAt && reward
+        && reward > 0 && reward < aggressiveThreshold
+        && moment().diff(moment(checkedAt), 'seconds') < 60) {
+        console.log(`[Skipped] ${poolName} - Reward: ${reward} - LastCheckedAt: ${checkedAt}`)
+        return
+    }
 
     var holdingCake = await pancakeswap.getHoldingCake(address)
     var pendingCake = await pancakeswap.getPendingCakeFromChef(pid, address)
@@ -238,6 +255,9 @@ async function reInvestPoolIfAny(poolName) {
     
     var totalPendingInDecimal = totalPending / Math.pow(10, 18)
     
+    pools[poolName].checkedAt = moment()
+    pools[poolName].reward = totalPendingInDecimal
+
     if (totalPendingInDecimal >= threshold) {
         // Reinvest with default gas price (5 gwei)
         var success = await reinvest(poolName)
@@ -248,7 +268,7 @@ async function reInvestPoolIfAny(poolName) {
         return 0
     } else {
         // Only print pool that near thresold
-        if (totalPendingInDecimal >= threshold * 0.7) {
+        if (totalPendingInDecimal >= aggressiveThreshold) {
             console.log(`[Be Ready] ${poolName}: ${totalPendingInDecimal} CAKE`)
         }
         
@@ -296,7 +316,7 @@ async function start() {
             console.log(`Gas Price ${gasPrice}; Threshold ${baseline * multiplier} (x${multiplier})`)
             for (var poolName in pools) {
                 await reInvestPoolIfAny(poolName)
-                // await sleep(100)
+                await utils.sleep(100)
             }
 
             
