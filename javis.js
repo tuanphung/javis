@@ -31,13 +31,20 @@ module.exports.consult = async function(action, options) {
     const query = contract.methods.reinvest()
     const encodedABI = query.encodeABI();
     
-    let gasPrice = await getGasPrice()
+    var gasPrice = 0
+    if (optimalGasPrice > 0) {
+        gasPrice = optimalGasPrice
+    } else {
+        gasPrice = parseInt(await getGasPrice()) + 1
+    }
+    
     const tx = {
         from: from,
         to: address,
         gas: 800000,
         // gasPrice: optimalGasPrice || (parseInt(web3.utils.toWei('7', 'gwei'), 10) + 1),
-        gasPrice: optimalGasPrice || (gasPrice + 1),
+        gasPrice: gasPrice,
+        // gasPrice: optimalGasPrice || (Math.round(parseInt(gasPrice) * 0.9) + 1), // send a fake gasPrice
         data: encodedABI,
     }
 

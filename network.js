@@ -1,8 +1,8 @@
 const Web3 = require('web3');
 
 const rpcURLs = [
-    'https://spring-morning-glade.bsc.quiknode.pro/be44e4d0b7eea84ef6726c5ce45221c4bab9c14c/',
-    // 'https://bsc-dataseed.binance.org',
+    // 'https://spring-morning-glade.bsc.quiknode.pro/be44e4d0b7eea84ef6726c5ce45221c4bab9c14c/',
+    'https://bsc-dataseed.binance.org',
     // 'https://bsc-dataseed1.defibit.io',
     // 'https://bsc-dataseed1.ninicoin.io',
 ]

@@ -5,3 +5,5 @@ let mnemonicWallet = ethers.Wallet.fromMnemonic(mnemonic);
 module.exports.privateKey = mnemonicWallet.privateKey
 module.exports.address = mnemonicWallet.address
 console.log(`Using account ${mnemonicWallet.address}`)
+module.exports.primaryWallet = mnemonicWallet
+module.exports.secondWallet = mnemonicWallet

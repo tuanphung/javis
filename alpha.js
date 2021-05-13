@@ -17,67 +17,7 @@ const pancakeswap = require('./pancakeswap')
 // https://bsc.mytokenpocket.vip
 let web3 = new Web3('https://bsc-dataseed.binance.org');
 
-// Watch
-var url = "wss://spring-morning-glade.bsc.quiknode.pro/be44e4d0b7eea84ef6726c5ce45221c4bab9c14c/";
-// var url = "wss://bsc-ws-node.nariox.org:443"
-var initMempoolWatcher = function () {
-    var customWsProvider = new ethers.providers.WebSocketProvider(url);
-
-    customWsProvider.on("pending", (tx) => {
-        setTimeout(async () => {
-            try {
-                let transaction = await web3.eth.getTransaction(tx)
-
-                // ignore if transaction is null
-                if (!transaction || !transaction.to || !transaction.from) {
-                    return
-                }
-
-                // randomly print transaction hash to ensure ws is working
-                if (utils.rollDice(0, 1000) <= 1) {
-                    console.log(transaction.hash);
-                }
-            
-                for (var poolName in pools) {
-                    var address = pools[poolName].address
-        
-                    if (transaction.to.toLowerCase() == address.toLowerCase() && transaction.from.toLowerCase() != account.address.toLowerCase()) {
-                        console.log(`[ALERT] There is new reInvest triggered on pool ${poolName} by ${transaction.from}`)
-        
-                        // counter them
-                        // increase minimum 10%
-                        myPendingTx.gasPrice = Math.round(parseInt(transaction.gasPrice) * 1.101)
-                    
-                        await sendTransaction(myPendingTx)
-                    }
-                }
-            } catch (err) {
-                // console.error(err);
-            }
-        })
-    });
-
-    customWsProvider._websocket.on("error", async () => {
-        console.log(`Unable to connect to ${ep.subdomain} retrying in 3s...`);
-        setTimeout(initMempoolWatcher, 3000);
-    });
-    customWsProvider._websocket.on("close", async (code) => {
-        console.log(
-            `Connection lost with code ${code}! Attempting reconnect in 3s...`
-        );
-        customWsProvider._websocket.terminate();
-        setTimeout(initMempoolWatcher, 3000);
-    });
-};
-
-initMempoolWatcher();
-
-var myPendingTx = null
-
-async function sendTransaction(tx) {
-    // Store pending transaction to counter other people who submit new transactions with higher gas price
-    myPendingTx = tx
-
+async function sendTransaction(tx, isOrigin) {
     let web3Private = network.getWeb3Private()
     const signPromise = web3Private.eth.accounts.signTransaction(tx, account.privateKey);
     return new Promise((resolve) => {
@@ -86,56 +26,61 @@ async function sendTransaction(tx) {
             // .rawTransaction depending on which signTransaction
             // function was called
             const sentTx = web3Private.eth.sendSignedTransaction(signedTx.raw || signedTx.rawTransaction);
+            sentTx.on('transactionHash', function(hash){
+                // if it's origin transaction, then try to speed to to counter
+                // if (isOrigin == true) {
+                //     console.log("INFO - Speed up")
+                //     tx.gasPrice = Math.round(parseInt(tx.gasPrice) * 1.102)
+                //     sendTransaction(tx, false)
+                // }
+            })
             sentTx.on('confirmation', (confirmationNumber) => {
                 if (confirmationNumber >= 2) {
+                    console.log("IMPORTANT - Reinvested")
                     resolve(true)
                 }
               })
             sentTx.on("receipt", receipt => {
                 console.log("Got Receipt")
+                
             });
             sentTx.on("error", err => {
                 // do something on transaction error
                 console.log("error")
+                console.log(err)
                 resolve(false)
             });
         }).catch((err) => {
             // do something when promise fails
             console.log("err")
+            console.log(err)
             resolve(false)
         });
     })
 }
 
 async function reinvest(poolName, optimalGasPrice) {
-    console.log(`Reinvesting ${poolName}`)
+    console.log(`INFO - Reinvesting ${poolName}`)
 
     const tx = await javis.consult('reinvest', {
         poolName: poolName,
         from: account.address,
         optimalGasPrice: optimalGasPrice,
     })
-    // const address = pools[poolName].address
-    // const abi = pools[poolName].abi
-
-    // // Init contract instance
-    // const contract = new web3.eth.Contract(abi, address)
-
-    // const query = contract.methods.reinvest()
-    // const encodedABI = query.encodeABI();
-    
-    // let gasPrice = await javis.getGasPrice()
-    // const tx = {
-    //     from: account.address,
-    //     to: address,
-    //     gas: 800000,
-    //     // gasPrice: optimalGasPrice || (parseInt(web3.utils.toWei('7', 'gwei'), 10) + 1),
-    //     gasPrice: optimalGasPrice || (gasPrice + 1),
-    //     data: encodedABI,
-    // };
 
     console.log(tx)
-    var success = await sendTransaction(tx)
+
+    // Send a transaction
+    var success = await sendTransaction(tx, true)
+
+    // wait 0.5s then speed up to counter
+    // await utils.sleep(500)
+
+    // tx.gasPrice = Math.round(parseInt(tx.gasPrice) * 1.102)
+    // console.log("INFO - Speed up")
+    // console.log(tx)
+    // var success = await sendTransaction(tx)
+
     return success
 }
 
@@ -245,7 +190,7 @@ async function reInvestPoolIfAny(poolName) {
     if (checkedAt && reward
         && reward > 0 && reward < aggressiveThreshold
         && moment().diff(moment(checkedAt), 'seconds') < 60) {
-        console.log(`[Skipped] ${poolName} - Reward: ${reward} - LastCheckedAt: ${checkedAt}`)
+        console.log(`INFO - Skip ${poolName} - Reward: ${reward} - LastCheckedAt: ${checkedAt}`)
         return
     }
 
@@ -269,7 +214,7 @@ async function reInvestPoolIfAny(poolName) {
     } else {
         // Only print pool that near thresold
         if (totalPendingInDecimal >= aggressiveThreshold) {
-            console.log(`[Be Ready] ${poolName}: ${totalPendingInDecimal} CAKE`)
+            console.log(`INFO - Prepare ${poolName}: ${totalPendingInDecimal} CAKE`)
         }
         
         return 0
@@ -313,10 +258,10 @@ async function start() {
                 multiplier = 3
             }
 
-            console.log(`Gas Price ${gasPrice}; Threshold ${baseline * multiplier} (x${multiplier})`)
+            console.log(`INFO - Gas Price ${gasPrice}; Threshold ${baseline * multiplier} (x${multiplier})`)
             for (var poolName in pools) {
                 await reInvestPoolIfAny(poolName)
-                await utils.sleep(100)
+                await utils.sleep(1000)
             }
 
             
@@ -326,7 +271,7 @@ async function start() {
         }
 
         console.log("=======")
-            await utils.sleep(10000)
+        await utils.sleep(1000)
      }
 }
 
