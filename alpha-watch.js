@@ -12,7 +12,6 @@ const pools = alphaPools.getPools()
 
 var ticker = 0
 var url = "wss://spring-morning-glade.bsc.quiknode.pro/be44e4d0b7eea84ef6726c5ce45221c4bab9c14c/";
-// var url = "wss://bsc-ws-node.nariox.org:443"
 var add = 'wss://bsc-ws-node.nariox.org:443'
 var web3WS = new Web3(new Web3.providers.WebsocketProvider(add));
 const subscription = web3WS.eth.subscribe('pendingTransactions', (err, res) => {
@@ -20,7 +19,16 @@ const subscription = web3WS.eth.subscribe('pendingTransactions', (err, res) => {
 });
 
 // New nonce
-var nonce = 2454
+var nonce = 0
+
+setTimeout(async () => {
+    while (true) {
+        var trxCount = await web3WS.eth.getTransactionCount(account.secondWallet.address)
+        nonce = trxCount
+        console.log(nonce)
+        utils.sleep(1000)
+    }
+})
 
 subscription.on('data', (txHash) => {
     // console.log()
